@@ -7,6 +7,9 @@ import FindingCard from './FindingCard'
 import DiffView from './DiffView'
 import ScoreGauge, { calculateScore } from './ScoreGauge'
 import Toast from './Toast'
+import CollaboratorBar from './CollaboratorBar'
+import CommentThread from './CommentThread'
+import useSocket from '../hooks/useSocket'
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
 
@@ -27,8 +30,14 @@ function ReviewDashboard() {
   const [filterCategory, setFilterCategory] = useState(null)
   const [filterStatus, setFilterStatus] = useState(null)
   const [sortBy, setSortBy] = useState('severity')
+  const [expandedFindingComments, setExpandedFindingComments] = useState(null)
   const editorRef = useRef(null)
   const decorationsRef = useRef([])
+
+  const {
+    onlineUsers, comments, activity, userName,
+    sendComment, emitFindingStatus, emitFixApplied, fetchComments,
+  } = useSocket(id)
 
   useEffect(() => { fetchReview(id) }, [id, fetchReview])
 
@@ -134,12 +143,19 @@ function ReviewDashboard() {
     try {
       const result = await applyFix(id, findingId)
       setDiffFinding(null)
-      showToast(`Fix applied to ${result.file_name} at line ${result.line_diff >= 0 ? '' : ''}${result.file_name}`, 'success')
+      emitFixApplied(findingId, result.file_name, result.new_content)
+      showToast(`Fix applied to ${result.file_name}`, 'success')
     } catch { /* handled in store */ }
   }
 
-  const handleAccept = (findingId) => updateFindingStatus(id, findingId, 'accepted')
-  const handleDismiss = (findingId) => updateFindingStatus(id, findingId, 'dismissed')
+  const handleAccept = (findingId) => {
+    updateFindingStatus(id, findingId, 'accepted')
+    emitFindingStatus(findingId, 'accepted')
+  }
+  const handleDismiss = (findingId) => {
+    updateFindingStatus(id, findingId, 'dismissed')
+    emitFindingStatus(findingId, 'dismissed')
+  }
 
   const handleAnalyze = async () => {
     try {
@@ -200,15 +216,18 @@ function ReviewDashboard() {
             </div>
           </div>
         </div>
-        {currentReview.status === 'pending' && (
-          <button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="px-4 py-2 bg-accent hover:bg-accent-hover text-bg-primary font-medium text-sm rounded-md transition-colors disabled:opacity-50"
-          >
-            {isAnalyzing ? 'Analyzing...' : 'Run AI Analysis'}
-          </button>
-        )}
+        <div className="flex items-center gap-4">
+          <CollaboratorBar onlineUsers={onlineUsers} activity={activity} />
+          {currentReview.status === 'pending' && (
+            <button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              className="px-4 py-2 bg-accent hover:bg-accent-hover text-bg-primary font-medium text-sm rounded-md transition-colors disabled:opacity-50"
+            >
+              {isAnalyzing ? 'Analyzing...' : 'Run AI Analysis'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Analyzing state */}
@@ -395,16 +414,26 @@ function ReviewDashboard() {
                 </div>
               ) : (
                 sortedFindings.map((finding) => (
-                  <FindingCard
-                    key={finding.id}
-                    finding={finding}
-                    isActive={selectedFinding?.id === finding.id}
-                    onSelect={(f) => { setSelectedFinding(f); scrollToLine(f.line_start) }}
-                    onViewFix={handleViewFix}
-                    onAccept={handleAccept}
-                    onDismiss={handleDismiss}
-                    onScrollToLine={handleScrollToLine}
-                  />
+                  <div key={finding.id}>
+                    <FindingCard
+                      finding={finding}
+                      isActive={selectedFinding?.id === finding.id}
+                      onSelect={(f) => { setSelectedFinding(f); scrollToLine(f.line_start) }}
+                      onViewFix={handleViewFix}
+                      onAccept={handleAccept}
+                      onDismiss={handleDismiss}
+                      onScrollToLine={handleScrollToLine}
+                    />
+                    {selectedFinding?.id === finding.id && (
+                      <CommentThread
+                        reviewId={id}
+                        findingId={finding.id}
+                        comments={comments}
+                        onSend={sendComment}
+                        fetchComments={fetchComments}
+                      />
+                    )}
+                  </div>
                 ))
               )}
             </div>
