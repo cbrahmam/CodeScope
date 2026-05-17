@@ -73,3 +73,46 @@ class CodeStructure(BaseModel):
     imports: List[str]
     exports: List[str]
     comment_ratio: float
+
+
+class Finding(BaseModel):
+    file_name: str
+    line_start: int
+    line_end: int
+    category: str
+    severity: str
+    title: str
+    description: str
+    why_it_matters: str = ""
+    suggestion: str
+    suggested_fix: str = ""
+    original_code: str = ""
+    confidence: str = "medium"
+    references: List[str] = []
+
+
+class FindingStatusUpdate(BaseModel):
+    status: str
+
+
+class FunctionComplexity(BaseModel):
+    name: str
+    line_start: int
+    line_end: int
+    lines_of_code: int
+    cyclomatic_complexity: int
+    max_nesting_depth: int
+    parameter_count: int
+    is_flagged: bool
+    flag_reasons: List[str]
+
+
+class ComplexityReport(BaseModel):
+    file_name: str
+    total_functions: int
+    average_complexity: float
+    max_complexity: int
+    most_complex_function: str
+    flagged_functions: List[FunctionComplexity]
+    all_functions: List[FunctionComplexity]
+    maintainability_score: float
