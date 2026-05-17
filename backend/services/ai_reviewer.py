@@ -1,10 +1,10 @@
 import json
-import os
 import anthropic
 from typing import List
 from models.schemas import Finding, CodeStructure
+from config import settings
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 REVIEW_PROMPT = """You are a senior staff engineer conducting a thorough code review. Analyze the following code for issues across these categories:
 
