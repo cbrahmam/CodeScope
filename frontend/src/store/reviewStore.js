@@ -6,6 +6,7 @@ const useReviewStore = create((set, get) => ({
   currentReview: null,
   findings: [],
   complexity: null,
+  dashboardStats: null,
   isLoading: false,
   isAnalyzing: false,
   error: null,
@@ -137,6 +138,25 @@ const useReviewStore = create((set, get) => ({
       return result
     } catch (err) {
       set({ toast: { message: 'Failed to apply fix', type: 'error' } })
+      throw err
+    }
+  },
+
+  fetchDashboardStats: async () => {
+    try {
+      const stats = await api.getDashboardStats()
+      set({ dashboardStats: stats })
+    } catch (err) {
+      console.error('Failed to fetch dashboard stats:', err)
+    }
+  },
+
+  exportReview: async (reviewId, format = 'markdown') => {
+    try {
+      const result = await api.exportReview(reviewId, format)
+      return result
+    } catch (err) {
+      set({ toast: { message: 'Failed to export review', type: 'error' } })
       throw err
     }
   },

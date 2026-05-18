@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
 import useReviewStore from '../store/reviewStore'
+import * as api from '../api/client'
 import { getLanguageInfo, getMonacoLanguage } from '../utils/languageDetect'
 import FindingCard from './FindingCard'
 import DiffView from './DiffView'
@@ -216,8 +217,46 @@ function ReviewDashboard() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <CollaboratorBar onlineUsers={onlineUsers} activity={activity} />
+          {currentReview.status === 'reviewed' && (
+            <>
+              <button
+                onClick={() => { navigator.clipboard.writeText(window.location.href); showToast('Link copied!', 'success') }}
+                className="px-3 py-1.5 text-xs bg-bg-tertiary border border-border-primary text-text-secondary hover:text-text-primary rounded-md transition-colors"
+                title="Copy shareable link"
+              >
+                Share
+              </button>
+              <div className="relative group">
+                <button className="px-3 py-1.5 text-xs bg-bg-tertiary border border-border-primary text-text-secondary hover:text-text-primary rounded-md transition-colors">
+                  Export
+                </button>
+                <div className="absolute right-0 top-8 w-48 bg-bg-secondary border border-border-primary rounded-lg shadow-xl z-50 hidden group-hover:block overflow-hidden">
+                  <button
+                    onClick={async () => {
+                      const result = await api.exportReview(id, 'markdown')
+                      navigator.clipboard.writeText(result.content)
+                      showToast('Markdown copied!', 'success')
+                    }}
+                    className="w-full px-3 py-2 text-xs text-left text-text-primary hover:bg-bg-tertiary transition-colors"
+                  >
+                    Copy as Markdown
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const result = await api.exportReview(id, 'github')
+                      navigator.clipboard.writeText(result.content)
+                      showToast('GitHub comment copied!', 'success')
+                    }}
+                    className="w-full px-3 py-2 text-xs text-left text-text-primary hover:bg-bg-tertiary transition-colors"
+                  >
+                    Copy as GitHub Comment
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
           {currentReview.status === 'pending' && (
             <button
               onClick={handleAnalyze}

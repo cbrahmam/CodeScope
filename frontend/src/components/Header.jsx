@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 
 function Header() {
   const location = useLocation()
+  const isHome = location.pathname === '/'
 
   return (
     <header className="bg-bg-secondary border-b border-border-primary sticky top-0 z-50">
@@ -21,15 +22,33 @@ function Header() {
           </span>
         </Link>
 
-        <nav className="flex items-center gap-4">
-          {location.pathname !== '/' && (
-            <Link
-              to="/"
-              className="px-4 py-1.5 bg-accent hover:bg-accent-hover text-bg-primary font-medium text-sm rounded-md transition-colors"
-            >
-              New Review
-            </Link>
-          )}
+        <nav className="flex items-center gap-3">
+          <Link
+            to="/reviews"
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              location.pathname === '/reviews'
+                ? 'text-accent bg-accent/10'
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            Reviews
+          </Link>
+          <Link
+            to="/github"
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              location.pathname === '/github'
+                ? 'text-accent bg-accent/10'
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            GitHub
+          </Link>
+          <Link
+            to="/new"
+            className="px-4 py-1.5 bg-accent hover:bg-accent-hover text-bg-primary font-medium text-sm rounded-md transition-colors"
+          >
+            New Review
+          </Link>
         </nav>
       </div>
     </header>

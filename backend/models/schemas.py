@@ -60,6 +60,10 @@ class ReviewListItem(BaseModel):
     created_at: str
     updated_at: str
     file_count: int
+    finding_counts: dict = {}
+    total_findings: int = 0
+    resolved_findings: int = 0
+    score: Optional[float] = None
 
 
 class CodeStructure(BaseModel):

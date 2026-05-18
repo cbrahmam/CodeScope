@@ -60,23 +60,133 @@ async def list_reviews():
     try:
         cursor = await db.execute("SELECT * FROM reviews ORDER BY created_at DESC")
         rows = await cursor.fetchall()
+
+        items = []
+        for row in rows:
+            review = row_to_review(row)
+            files = parse_files_json(review["files"])
+
+            fc = await db.execute(
+                "SELECT severity, status FROM findings WHERE review_id = ?", (review["id"],)
+            )
+            finding_rows = await fc.fetchall()
+
+            finding_counts = {}
+            total = 0
+            resolved = 0
+            for fr in finding_rows:
+                sev = fr["severity"]
+                finding_counts[sev] = finding_counts.get(sev, 0) + 1
+                total += 1
+                if fr["status"] in ("resolved", "dismissed"):
+                    resolved += 1
+
+            score = None
+            if total > 0:
+                weights = {"critical": 10, "high": 5, "medium": 2, "low": 1, "info": 0}
+                deductions = sum(weights.get(fr["severity"], 1) for fr in finding_rows if fr["status"] not in ("resolved", "dismissed"))
+                score = max(0, round(100 - deductions, 1))
+
+            items.append(ReviewListItem(
+                id=review["id"],
+                title=review["title"],
+                language=review["language"],
+                status=review["status"],
+                created_at=review["created_at"],
+                updated_at=review["updated_at"],
+                file_count=len(files),
+                finding_counts=finding_counts,
+                total_findings=total,
+                resolved_findings=resolved,
+                score=score,
+            ))
     finally:
         await db.close()
 
-    items = []
-    for row in rows:
-        review = row_to_review(row)
-        files = parse_files_json(review["files"])
-        items.append(ReviewListItem(
-            id=review["id"],
-            title=review["title"],
-            language=review["language"],
-            status=review["status"],
-            created_at=review["created_at"],
-            updated_at=review["updated_at"],
-            file_count=len(files),
-        ))
     return items
+
+
+@router.get("/stats/dashboard")
+async def dashboard_stats():
+    db = await get_db()
+    try:
+        rc = await db.execute("SELECT COUNT(*) as cnt FROM reviews")
+        total_reviews = (await rc.fetchone())["cnt"]
+
+        fc = await db.execute("SELECT COUNT(*) as cnt FROM findings")
+        total_findings = (await fc.fetchone())["cnt"]
+
+        cc = await db.execute(
+            "SELECT category, COUNT(*) as cnt FROM findings GROUP BY category ORDER BY cnt DESC LIMIT 1"
+        )
+        top_cat_row = await cc.fetchone()
+        top_category = top_cat_row["category"] if top_cat_row else None
+
+        sc = await db.execute("SELECT severity, status FROM findings")
+        all_findings = await sc.fetchall()
+        weights = {"critical": 10, "high": 5, "medium": 2, "low": 1, "info": 0}
+        if total_reviews > 0 and all_findings:
+            review_ids = set()
+            for f in all_findings:
+                pass
+            rc2 = await db.execute("SELECT id FROM reviews WHERE status = 'reviewed'")
+            reviewed = await rc2.fetchall()
+            if reviewed:
+                scores = []
+                for rev in reviewed:
+                    rid = rev["id"]
+                    rfc = await db.execute("SELECT severity, status FROM findings WHERE review_id = ?", (rid,))
+                    rfindings = await rfc.fetchall()
+                    if rfindings:
+                        ded = sum(weights.get(rf["severity"], 1) for rf in rfindings if rf["status"] not in ("resolved", "dismissed"))
+                        scores.append(max(0, round(100 - ded, 1)))
+                avg_score = round(sum(scores) / len(scores), 1) if scores else None
+            else:
+                avg_score = None
+        else:
+            avg_score = None
+
+        recent_cursor = await db.execute("SELECT * FROM reviews ORDER BY created_at DESC LIMIT 5")
+        recent_rows = await recent_cursor.fetchall()
+        recent = []
+        for row in recent_rows:
+            review = row_to_review(row)
+            files = parse_files_json(review["files"])
+            rfc = await db.execute("SELECT severity, status FROM findings WHERE review_id = ?", (review["id"],))
+            rfindings = await rfc.fetchall()
+            finding_counts = {}
+            total = 0
+            resolved = 0
+            for rf in rfindings:
+                finding_counts[rf["severity"]] = finding_counts.get(rf["severity"], 0) + 1
+                total += 1
+                if rf["status"] in ("resolved", "dismissed"):
+                    resolved += 1
+            score = None
+            if total > 0:
+                ded = sum(weights.get(rf["severity"], 1) for rf in rfindings if rf["status"] not in ("resolved", "dismissed"))
+                score = max(0, round(100 - ded, 1))
+            recent.append({
+                "id": review["id"],
+                "title": review["title"],
+                "language": review["language"],
+                "status": review["status"],
+                "created_at": review["created_at"],
+                "file_count": len(files),
+                "total_findings": total,
+                "resolved_findings": resolved,
+                "score": score,
+            })
+    finally:
+        await db.close()
+
+    return {
+        "total_reviews": total_reviews,
+        "total_findings": total_findings,
+        "top_category": top_category,
+        "avg_score": avg_score,
+        "recent_reviews": recent,
+    }
 
 
 @router.get("/{review_id}", response_model=ReviewDetail)
