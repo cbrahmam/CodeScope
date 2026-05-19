@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MonacoEditor from './MonacoEditor'
 import FileUpload from './FileUpload'
@@ -31,6 +31,17 @@ function CodeInput() {
   const langInfo = getLanguageInfo(detectedLanguage)
 
   const canSubmit = activeTab === 'paste' ? code.trim().length > 0 : uploadedFiles.length > 0
+
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSubmit && !isLoading) {
+        e.preventDefault()
+        handleSubmit()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  })
 
   const handleSubmit = async () => {
     const files = activeTab === 'paste'

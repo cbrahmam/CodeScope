@@ -111,6 +111,36 @@ async def review_code(files: List[dict], structures: List[dict]) -> List[Finding
     return findings
 
 
+async def generate_review_summary(findings: list, files: list) -> str:
+    if not findings:
+        return "No issues were found in this codebase."
+
+    findings_text = "\n".join(
+        f"- [{f.get('severity', 'medium').upper()}] {f.get('title', '')} in {f.get('file_name', '')}:{f.get('line_start', 0)} — {f.get('description', '')[:100]}"
+        for f in findings[:20]
+    )
+    file_names = ", ".join(f.get("filename", "") for f in files[:10])
+
+    prompt = f"""Based on these code review findings, write a concise 2-3 sentence prose summary for a developer.
+Include: the most critical issues, the main categories of concern, and a recommended priority for what to fix first.
+Do NOT use markdown formatting. Write plain prose.
+
+Files reviewed: {file_names}
+
+Findings:
+{findings_text}"""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip()
+    except Exception:
+        return "Summary generation failed. Review findings individually for details."
+
+
 async def review_cross_file(files: List[dict], structures: List[dict]) -> List[Finding]:
     if len(files) < 2:
         return []

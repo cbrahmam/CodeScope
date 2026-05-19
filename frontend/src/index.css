@@ -56,7 +56,7 @@ body {
   margin-left: 4px;
 }
 
-/* Tailwind line-clamp */
+/* Line clamp */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -64,11 +64,73 @@ body {
   overflow: hidden;
 }
 
-/* Toast animation */
+/* Animations */
 @keyframes slide-in-from-bottom {
   from { transform: translateY(8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 .animate-in.slide-in-from-bottom-2 {
   animation: slide-in-from-bottom 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down {
+  animation: slide-down 0.2s ease-out;
+}
+
+/* Staggered finding cards */
+.finding-card {
+  animation: fade-in 0.3s ease-out both;
+}
+.finding-card:nth-child(1) { animation-delay: 0ms; }
+.finding-card:nth-child(2) { animation-delay: 50ms; }
+.finding-card:nth-child(3) { animation-delay: 100ms; }
+.finding-card:nth-child(4) { animation-delay: 150ms; }
+.finding-card:nth-child(5) { animation-delay: 200ms; }
+.finding-card:nth-child(n+6) { animation-delay: 250ms; }
+
+/* Skeleton loader */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #161B22 25%, #21262D 50%, #161B22 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+/* Smooth status transitions */
+.status-transition {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Keyboard shortcut key */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  background: #21262D;
+  border: 1px solid #30363D;
+  border-radius: 3px;
+  color: #8B949E;
+  box-shadow: 0 1px 0 #1B1F23;
 }

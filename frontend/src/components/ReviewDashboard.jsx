@@ -11,6 +11,7 @@ import Toast from './Toast'
 import CollaboratorBar from './CollaboratorBar'
 import CommentThread from './CommentThread'
 import useSocket from '../hooks/useSocket'
+import useKeyboardShortcuts, { SHORTCUTS } from '../hooks/useKeyboardShortcuts'
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
 
@@ -25,13 +26,16 @@ function ReviewDashboard() {
   const [files, setFiles] = useState([])
   const [activeFileIdx, setActiveFileIdx] = useState(0)
   const [selectedFinding, setSelectedFinding] = useState(null)
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const [diffFinding, setDiffFinding] = useState(null)
   const [activeTab, setActiveTab] = useState('findings')
   const [filterSeverity, setFilterSeverity] = useState(null)
   const [filterCategory, setFilterCategory] = useState(null)
   const [filterStatus, setFilterStatus] = useState(null)
   const [sortBy, setSortBy] = useState('severity')
-  const [expandedFindingComments, setExpandedFindingComments] = useState(null)
+  const [summary, setSummary] = useState(null)
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false)
+  const [summaryLoading, setSummaryLoading] = useState(false)
   const editorRef = useRef(null)
   const decorationsRef = useRef([])
 
@@ -47,6 +51,16 @@ function ReviewDashboard() {
       try { setFiles(JSON.parse(currentReview.files)) } catch { setFiles([]) }
     }
   }, [currentReview])
+
+  useEffect(() => {
+    if (currentReview?.status === 'reviewed' && findings.length > 0 && !summary) {
+      setSummaryLoading(true)
+      api.getReviewSummary(id).then((data) => {
+        setSummary(data.summary)
+        setSummaryLoading(false)
+      }).catch(() => setSummaryLoading(false))
+    }
+  }, [currentReview?.status, findings.length, id])
 
   const activeFile = files[activeFileIdx]
 
@@ -169,15 +183,43 @@ function ReviewDashboard() {
     if (currentReview?.status === 'reviewed') fetchComplexity(id)
   }, [currentReview?.status, id, fetchComplexity])
 
+  const handleSelectIndex = useCallback((idx) => {
+    setSelectedIndex(idx)
+    const f = sortedFindings[idx]
+    if (f) {
+      setSelectedFinding(f)
+      scrollToLine(f.line_start)
+    }
+  }, [sortedFindings])
+
+  const { showHelp, setShowHelp } = useKeyboardShortcuts({
+    findings: sortedFindings,
+    selectedIndex,
+    onSelectIndex: handleSelectIndex,
+    onAccept: handleAccept,
+    onDismiss: handleDismiss,
+    onApplyFix: handleViewFix,
+    onClose: () => setDiffFinding(null),
+    enabled: activeTab === 'findings' && !isLoading,
+  })
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="flex items-center gap-3 text-text-secondary">
-          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          <span>Loading review...</span>
+      <div className="max-w-[1600px] mx-auto animate-fade-in">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="skeleton w-16 h-16 rounded-full" />
+          <div>
+            <div className="skeleton w-48 h-5 mb-2" />
+            <div className="skeleton w-32 h-3" />
+          </div>
+        </div>
+        <div className="flex gap-4" style={{ minHeight: '500px' }}>
+          <div className="flex-[3] skeleton rounded-md" style={{ height: 600 }} />
+          <div className="flex-[2] space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="skeleton rounded-md" style={{ height: 80 }} />
+            ))}
+          </div>
         </div>
       </div>
     )
@@ -196,8 +238,26 @@ function ReviewDashboard() {
   const monacoLang = activeFile ? getMonacoLanguage(activeFile.language) : 'plaintext'
 
   return (
-    <div className="max-w-[1600px] mx-auto">
+    <div className="max-w-[1600px] mx-auto animate-fade-in">
       <Toast />
+
+      {/* Keyboard shortcuts help */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={() => setShowHelp(false)}>
+          <div className="bg-bg-secondary border border-border-primary rounded-lg p-6 w-80 animate-slide-down" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-text-primary mb-3">Keyboard Shortcuts</h3>
+            <div className="space-y-2">
+              {SHORTCUTS.map((s) => (
+                <div key={s.key} className="flex items-center justify-between">
+                  <span className="text-xs text-text-secondary">{s.description}</span>
+                  <span className="kbd">{s.label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-text-secondary mt-4 text-center">Press <span className="kbd">?</span> to toggle</p>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
@@ -221,6 +281,13 @@ function ReviewDashboard() {
           <CollaboratorBar onlineUsers={onlineUsers} activity={activity} />
           {currentReview.status === 'reviewed' && (
             <>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="px-2 py-1.5 text-xs bg-bg-tertiary border border-border-primary text-text-secondary hover:text-text-primary rounded-md transition-colors"
+                title="Keyboard shortcuts"
+              >
+                <span className="kbd">?</span>
+              </button>
               <button
                 onClick={() => { navigator.clipboard.writeText(window.location.href); showToast('Link copied!', 'success') }}
                 className="px-3 py-1.5 text-xs bg-bg-tertiary border border-border-primary text-text-secondary hover:text-text-primary rounded-md transition-colors"
@@ -269,6 +336,33 @@ function ReviewDashboard() {
         </div>
       </div>
 
+      {/* AI Summary Panel */}
+      {currentReview.status === 'reviewed' && (summary || summaryLoading) && (
+        <div className="mb-4 bg-bg-secondary border border-border-primary rounded-lg overflow-hidden animate-slide-down">
+          <button
+            onClick={() => setSummaryCollapsed(!summaryCollapsed)}
+            className="w-full flex items-center justify-between px-4 py-2 hover:bg-bg-tertiary/50 transition-colors"
+          >
+            <span className="text-xs font-medium text-text-secondary">AI Summary</span>
+            <svg className={`w-3.5 h-3.5 text-text-secondary transition-transform ${summaryCollapsed ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {!summaryCollapsed && (
+            <div className="px-4 pb-3">
+              {summaryLoading ? (
+                <div className="space-y-2">
+                  <div className="skeleton w-full h-3" />
+                  <div className="skeleton w-3/4 h-3" />
+                </div>
+              ) : (
+                <p className="text-sm text-text-primary leading-relaxed">{summary}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Analyzing state */}
       {isAnalyzing && (
         <div className="bg-bg-secondary border border-border-primary rounded-lg p-8 text-center mb-4">
@@ -289,7 +383,7 @@ function ReviewDashboard() {
               <button
                 key={sev}
                 onClick={() => setFilterSeverity(filterSeverity === sev ? null : sev)}
-                className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                className={`px-2 py-1 text-xs rounded font-medium transition-colors status-transition ${
                   filterSeverity === sev ? 'ring-1 ring-white/30' : ''
                 } ${
                   sev === 'critical' ? 'bg-severity-critical/20 text-severity-critical' :
@@ -348,7 +442,7 @@ function ReviewDashboard() {
 
       {/* Diff view overlay */}
       {diffFinding && (
-        <div className="mb-4">
+        <div className="mb-4 animate-slide-down">
           <DiffView
             finding={diffFinding}
             onApplyFix={handleApplyFix}
@@ -397,6 +491,17 @@ function ReviewDashboard() {
                 value={activeFile?.content || ''}
                 theme="vs-dark"
                 onMount={handleEditorMount}
+                loading={
+                  <div className="flex items-center justify-center h-[600px] bg-bg-secondary">
+                    <div className="flex items-center gap-3 text-text-secondary">
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span className="text-sm">Loading editor...</span>
+                    </div>
+                  </div>
+                }
                 options={{
                   readOnly: true,
                   minimap: { enabled: false },
@@ -452,12 +557,12 @@ function ReviewDashboard() {
                   {findings.length === 0 ? 'No findings yet. Run AI analysis to get started.' : 'No findings match the current filters.'}
                 </div>
               ) : (
-                sortedFindings.map((finding) => (
-                  <div key={finding.id}>
+                sortedFindings.map((finding, idx) => (
+                  <div key={finding.id} className="finding-card">
                     <FindingCard
                       finding={finding}
                       isActive={selectedFinding?.id === finding.id}
-                      onSelect={(f) => { setSelectedFinding(f); scrollToLine(f.line_start) }}
+                      onSelect={(f) => { setSelectedFinding(f); setSelectedIndex(idx); scrollToLine(f.line_start) }}
                       onViewFix={handleViewFix}
                       onAccept={handleAccept}
                       onDismiss={handleDismiss}

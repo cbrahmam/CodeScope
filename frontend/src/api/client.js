@@ -28,6 +28,8 @@ export const applyFix = (reviewId, findingId) =>
 
 export const getDashboardStats = () => api.get('/reviews/stats/dashboard').then((r) => r.data)
 
+export const getReviewSummary = (id) => api.get(`/reviews/${id}/summary`).then((r) => r.data)
+
 export const reReview = (reviewId, files) =>
   api.post(`/reviews/${reviewId}/re-review`, { files }).then((r) => r.data)
 

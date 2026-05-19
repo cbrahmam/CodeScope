@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from database import get_db
 from models.schemas import FileInput, FindingResponse, FindingStatusUpdate, ComplexityReport
 from models.db_models import row_to_review, row_to_finding, parse_files_json
-from services.ai_reviewer import review_code, review_cross_file
+from services.ai_reviewer import review_code, review_cross_file, generate_review_summary
 from services.code_parser import detect_language, parse_code_structure
 from services.complexity_analyzer import analyze_complexity
 from services.diff_generator import apply_fix, generate_diff
@@ -124,6 +124,34 @@ async def get_findings(
     findings = [FindingResponse(**row_to_finding(r)) for r in rows]
     findings.sort(key=lambda f: SEVERITY_ORDER.get(f.severity, 5))
     return findings
+
+
+@router.get("/{review_id}/summary")
+async def get_review_summary(review_id: str):
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM reviews WHERE id = ?", (review_id,))
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Review not found")
+
+        review = row_to_review(row)
+        files = parse_files_json(review["files"])
+
+        fc = await db.execute(
+            "SELECT * FROM findings WHERE review_id = ? ORDER BY severity, line_start",
+            (review_id,),
+        )
+        finding_rows = await fc.fetchall()
+        findings = [row_to_finding(r) for r in finding_rows]
+    finally:
+        await db.close()
+
+    if not findings:
+        return {"review_id": review_id, "summary": "No issues were found in this code. The codebase looks clean."}
+
+    summary = await generate_review_summary(findings, files)
+    return {"review_id": review_id, "summary": summary}
 
 
 @router.get("/{review_id}/complexity")
